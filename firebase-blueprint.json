@@ -1,0 +1,76 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "User profile with roles.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "viewer"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "role", "createdAt"]
+    },
+    "house": {
+      "title": "House",
+      "description": "House details and meter number.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "meterNumber": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "meterNumber", "isActive", "createdAt", "updatedAt"]
+    },
+    "reading": {
+      "title": "Monthly Reading",
+      "description": "Monthly electricity reading.",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "month": { "type": "string" },
+        "rate": { "type": "number" },
+        "totalUnits": { "type": "number" },
+        "totalCost": { "type": "number" },
+        "authorId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["date", "month", "rate", "totalUnits", "totalCost", "authorId", "createdAt", "updatedAt"]
+    },
+    "houseReading": {
+      "title": "House Reading for a Specific Month",
+      "description": "Subcollection inside reading for each house's reading. (Actually just keeping a map in reading is fine, but if we need a subcollection).",
+      "type": "object",
+      "properties": {
+        "houseId": { "type": "string" },
+        "previous": { "type": "number" },
+        "current": { "type": "number" },
+        "units": { "type": "number" },
+        "cost": { "type": "number" }
+      },
+      "required": ["houseId", "previous", "current", "units", "cost"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "user",
+      "description": "User profiles"
+    },
+    "houses/{houseId}": {
+      "schema": "house",
+      "description": "Master list of houses"
+    },
+    "readings/{readingId}": {
+      "schema": "reading",
+      "description": "Monthly readings records"
+    },
+    "readings/{readingId}/houseReadings/{houseReadingId}": {
+        "schema": "houseReading",
+        "description": "The reading info for a specific house for that month"
+    }
+  }
+}

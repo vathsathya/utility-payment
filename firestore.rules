@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() {
+      // Bootstrapped admin
+      return isSignedIn() && (
+        request.auth.token.email == 'vath.sathya@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+    
+    function isValidId(id) { return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isVerified() { return true; }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'role', 'createdAt'])
+        && data.keys().size() <= 6
+        && data.email is string
+        && (data.role == 'admin' || data.role == 'viewer')
+        && data.createdAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) && request.auth.uid == userId && (incoming().role == 'viewer' || request.auth.token.email == 'vath.sathya@gmail.com') && incoming().createdAt == request.time;
+      allow update: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) && isAdmin() && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(userId);
+    }
+
+    function isValidHouse(data) {
+      return data.keys().hasAll(['name', 'meterNumber', 'isActive', 'createdAt', 'updatedAt'])
+        && data.keys().size() <= 6
+        && data.name is string && data.name.size() <= 100
+        && data.meterNumber is string && data.meterNumber.size() <= 100
+        && data.isActive is bool
+        && (data.keys().hasAny(['sharedWith']) == false || data.sharedWith is list)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /houses/{houseId} {
+      allow read: if isSignedIn() && (isAdmin() || (resource.data.keys().hasAny(['sharedWith']) && request.auth.uid in resource.data.sharedWith));
+      allow create: if isAdmin() && isValidId(houseId) && isValidHouse(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isAdmin() && isValidId(houseId) && isValidHouse(incoming()) && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'meterNumber', 'isActive', 'sharedWith', 'updatedAt']);
+      allow delete: if isAdmin() && isValidId(houseId);
+    }
+
+    function isValidReading(data) {
+      return data.keys().hasAll(['date', 'month', 'rate', 'totalUnits', 'totalCost', 'authorId', 'createdAt', 'updatedAt', 'houseReadings'])
+        && data.keys().size() <= 9
+        && data.date is string && data.date.size() <= 20
+        && data.month is string && data.month.size() <= 10
+        && data.rate is number
+        && data.totalUnits is number
+        && data.totalCost is number
+        && data.authorId is string && data.authorId == request.auth.uid
+        && data.houseReadings is map
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /readings/{readingId} {
+      allow read: if isSignedIn() && isVerified();
+      allow create: if isAdmin() && isValidId(readingId) && isValidReading(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isAdmin() && isValidId(readingId) && isValidReading(incoming()) && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time && incoming().diff(existing()).affectedKeys().hasOnly(['date', 'month', 'rate', 'totalUnits', 'totalCost', 'houseReadings', 'updatedAt']);
+      allow delete: if isAdmin() && isValidId(readingId);
+
+      function isValidHouseReading(data) {
+        return data.keys().hasAll(['houseId', 'previous', 'current', 'units', 'cost'])
+          && data.keys().size() <= 5
+          && data.houseId is string && data.houseId.size() <= 128
+          && data.previous is number
+          && data.current is number
+          && data.units is number
+          && data.cost is number;
+      }
+
+      match /houseReadings/{houseReadingId} {
+        allow read: if isSignedIn() && isVerified();
+        allow create: if isAdmin() && isValidId(houseReadingId) && isValidHouseReading(incoming());
+        allow update: if isAdmin() && isValidId(houseReadingId) && isValidHouseReading(incoming()) && incoming().diff(existing()).affectedKeys().hasOnly(['previous', 'current', 'units', 'cost']);
+        allow delete: if isAdmin() && isValidId(houseReadingId);
+      }
+    }
+  }
+}
